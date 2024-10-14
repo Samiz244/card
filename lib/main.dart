@@ -21,12 +21,14 @@ class GameState extends ChangeNotifier {
   List<CardModel> _cards = [];
   List<CardModel> get cards => _cards;
 
+  CardModel? _firstCard; // Track the first card that was flipped
+  CardModel? _secondCard; // Track the second card that was flipped
+
   GameState() {
     _initializeGame();
   }
 
   void _initializeGame() {
-    // Use network images for the card faces
     final List<String> cardImages = [
       'https://via.placeholder.com/150/FF5733/FFFFFF?text=1',
       'https://via.placeholder.com/150/33FF57/FFFFFF?text=2',
@@ -46,14 +48,46 @@ class GameState extends ChangeNotifier {
   }
 
   void flipCard(CardModel card) {
-    if (!card.isMatched) {
-      card.isFlipped = !card.isFlipped;
+    if (!card.isMatched && card != _firstCard) {
+      card.isFlipped = true; // Flip the card face up
       notifyListeners();
+
+      if (_firstCard == null) {
+        // First card flipped
+        _firstCard = card;
+      } else {
+        // Second card flipped
+        _secondCard = card;
+        _checkForMatch();
+      }
+    }
+  }
+
+  void _checkForMatch() {
+    if (_secondCard != null && _firstCard != null) {
+      if (_firstCard!.imagePath == _secondCard!.imagePath) {
+        // Cards match
+        _firstCard!.isMatched = true;
+        _secondCard!.isMatched = true;
+        // Reset the tracking cards after the match
+        _firstCard = null;
+        _secondCard = null;
+      } else {
+        // Cards do not match, flip them back automatically after a delay
+        Future.delayed(Duration(seconds: 1), () {
+          _firstCard!.isFlipped = false; // Flip first card back
+          _secondCard!.isFlipped = false; // Flip second card back
+          // Reset the tracking cards after the check
+          _firstCard = null;
+          _secondCard = null;
+          notifyListeners(); // Notify listeners to rebuild UI
+        });
+      }
     }
   }
 }
 
-// CardWidget to display each card
+// CardWidget to display each card with flip animation
 class CardWidget extends StatelessWidget {
   final CardModel card;
   final VoidCallback onTap;
@@ -68,15 +102,18 @@ class CardWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Card(
-        child: Container(
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: NetworkImage(card.isFlipped
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          image: DecorationImage(
+            image: NetworkImage(
+              card.isFlipped
                   ? card.imagePath
-                  : 'https://via.placeholder.com/150/CCCCCC/FFFFFF?text=BACK'), // Card back image
-              fit: BoxFit.cover,
+                  : 'https://via.placeholder.com/150/CCCCCC/FFFFFF?text=BACK', // Back image
             ),
+            fit: BoxFit.cover,
           ),
         ),
       ),
